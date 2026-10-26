@@ -52,7 +52,7 @@ Use the cross-repo release workflow skill when preparing an OSS PR:
 ## Finish Rules
 
 - Run the smallest validation that gives confidence for the change.
-- Use repo-level checks like `npm run lint`, `npm run build`, `npm run typecheck`, and `npm test` when the change crosses package boundaries — each is wired through Turborepo (`turbo run <task>`) and covers every workspace, including `packages/dashboard/` and `packages/shared-schemas/`.
+- Use repo-level checks like `npm run lint`, `npm run build`, `npm run typecheck`, and `npm test` when the change crosses package boundaries — each is wired through Turborepo (`turbo run <task>`). Lint, build, and typecheck cover every workspace; `npm test` runs tests in `backend/`, `packages/dashboard/`, and `packages/ui/`. `frontend/` and `packages/shared-schemas/` do not currently define a `test` script.
 - For dashboard UI behavior changes, choose the lowest useful frontend test layer from the `dashboard` skill and run that command before reporting back.
 - Use the package-specific validation steps in the child skill when the work is isolated to one package.
 - When reporting back, state what changed, what you validated, and what you could not validate.
