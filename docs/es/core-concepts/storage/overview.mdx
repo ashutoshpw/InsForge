@@ -39,6 +39,12 @@ graph TB
     style SecureAccess fill:#ea580c,stroke:#fb923c,color:#fed7aa
 ```
 
+## Contenido activo y tipos MIME
+
+Las cargas mediante la API REST de almacenamiento y los SDK conservan los bytes del archivo, pero normalizan los tipos de contenido activo, como HTML, SVG, JavaScript y XML, a `application/octet-stream` para evitar ataques de scripting entre sitios (XSS) almacenado. Por ejemplo, cargar `index.html` con `text/html` tiene éxito, pero el `mimeType` devuelto es `application/octet-stream` y su URL de almacenamiento descarga el archivo en lugar de mostrar una página web.
+
+Esta protección también se aplica a los depósitos públicos. Estas API no ofrecen una opción para mostrar HTML en el navegador; utiliza un servicio de alojamiento web para publicar páginas HTML.
+
 ## Características
 
 ### API compatible con S3

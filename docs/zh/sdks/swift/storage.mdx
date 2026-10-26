@@ -72,6 +72,10 @@ try await insforge.storage.deleteBucket("old-bucket")
 
 上传文件到存储桶。
 
+<Warning>
+HTML、SVG、JavaScript 和 XML 上传会以 `application/octet-stream` 存储，以防止存储型跨站脚本攻击（XSS）。例如，`index.html` 可以成功上传，但其 URL 会下载文件，而不是呈现网页，即使在公开存储桶中也是如此。请查看返回的 `mimeType` 以了解实际类型。这些 API 不提供内联呈现 HTML 的选项。
+</Warning>
+
 ### 参数
 
 - `path` (String) - 文件的对象键/路径

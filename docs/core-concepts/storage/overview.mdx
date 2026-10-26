@@ -39,6 +39,12 @@ graph TB
     style SecureAccess fill:#ea580c,stroke:#fb923c,color:#fed7aa
 ```
 
+## Active content and MIME types
+
+Uploads through the Storage REST API and SDKs keep the file bytes, but normalize active content types such as HTML, SVG, JavaScript, and XML to `application/octet-stream` to prevent stored cross-site scripting (XSS). For example, uploading `index.html` with `text/html` succeeds, but the returned `mimeType` is `application/octet-stream` and its storage URL downloads the file instead of rendering a web page.
+
+This protection also applies to public buckets. There is no option in these APIs to serve HTML inline; use a web hosting service to publish HTML pages.
+
 ## Features
 
 ### S3-compatible API
