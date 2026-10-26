@@ -60,7 +60,6 @@ export function errorMiddleware(err: unknown, _req: Request, res: Response, _nex
     );
   }
 
-  // Default internal error with optional message
-  const message = err.message || 'Internal server error';
-  return errorResponse(res, ERROR_CODES.INTERNAL_ERROR, message, 500);
+  // Default internal error
+  return errorResponse(res, ERROR_CODES.INTERNAL_ERROR, 'Internal server error', 500);
 }
