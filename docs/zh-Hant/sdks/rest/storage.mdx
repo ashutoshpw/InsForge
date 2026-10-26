@@ -7,6 +7,14 @@ description: "透過 InsForge REST API 進行檔案上傳、下載、貯體管�
 
 存儲API提供基於貯體的檔案存儲，類似於S3。上傳、下載和管理檔案，支援本機和S3相容儲存後端。
 
+## 主動式內容與 MIME 類型
+
+透過儲存 REST API 和 SDK 上傳時，檔案位元組保持不變，但 HTML、SVG、JavaScript 和 XML 等主動式內容類型會被正規化為 `application/octet-stream`，以防止儲存型跨網站指令碼攻擊（XSS）。例如，以 `text/html` 上傳 `index.html` 會成功，但傳回的 `mimeType` 為 `application/octet-stream`，其儲存 URL 會下載檔案，而不是呈現網頁。
+
+直接上傳會檢查檔案簽章並掃描文字中的主動式內容，因此儲存的 MIME 類型可能與提供的 `Content-Type` 不同。上傳策略和確認請求也會正規化宣告的主動式內容類型。使用預先簽署的上傳時，請原樣提交傳回的所有 `fields` 值，包括其中的 `Content-Type`（如有）。
+
+此保護同樣適用於公開儲存貯體。這些 API 不提供內嵌呈現 HTML 的選項；請使用網站託管服務發佈 HTML 頁面。
+
 ## 標頭
 
 針對經過驗證的函數調用：

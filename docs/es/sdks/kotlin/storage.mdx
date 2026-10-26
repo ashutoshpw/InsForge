@@ -25,6 +25,10 @@ val bucket = insforge.storage.from("images")
 
 Cargar un archivo con una ruta/clave específica.
 
+<Warning>
+Las cargas de HTML, SVG, JavaScript y XML se almacenan como `application/octet-stream` para evitar ataques de scripting entre sitios (XSS) almacenado. Por ejemplo, `index.html` se carga correctamente, pero su URL descarga el archivo en lugar de mostrar una página, incluso en un depósito público. Consulta el `mimeType` devuelto para conocer el tipo efectivo. Estas API no ofrecen una opción para mostrar HTML en el navegador.
+</Warning>
+
 ### Parámetros
 
 - `path` (String) - Ruta/clave del archivo en el depósito

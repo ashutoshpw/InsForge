@@ -2,7 +2,9 @@ openapi: 3.0.3
 info:
   title: Insforge Storage API
   version: 2.0.0
-  description: Bucket-based storage system similar to S3
+  description: |
+    Bucket-based storage system similar to S3.
+    Uploads through the Storage REST API preserve file bytes but normalize active content types such as HTML, SVG, JavaScript, and XML to `application/octet-stream` to prevent stored XSS. For example, uploading `index.html` succeeds, but its URL downloads the file instead of rendering a page, even in public buckets. These endpoints do not offer an option to serve HTML inline.
 
 paths:
   /api/storage/config:
@@ -385,6 +387,8 @@ paths:
 
     post:
       summary: Upload Object with Auto-Generated Key
+      description: |
+        Inspects file signatures and scans text for active content before storing MIME metadata. Active content such as HTML, SVG, JavaScript, and XML is stored as `application/octet-stream` to prevent stored XSS. The response `mimeType` reports the effective type; the file bytes are preserved.
       tags:
         - Client
       security:
@@ -542,6 +546,8 @@ paths:
         Clients must determine the upload flow from the returned response, using the method field, rather than assuming behavior based on the configured storage backend. 
 
         The filename is used verbatim as the object key. Uploading to an existing key replaces the current object in place. To upload with a server-generated unique key instead, use `POST /api/storage/buckets/{bucketName}/objects`. End-user creates and replacements are gated by the `storage.objects` row-level-security policies.
+
+        Declared active content types such as HTML, SVG, JavaScript, and XML are normalized to `application/octet-stream` to prevent stored XSS. For presigned uploads, submit every returned `fields` value unchanged, including `Content-Type` when present.
       tags:
         - Client
       security:
@@ -569,7 +575,7 @@ paths:
                   example: profile-photo.jpg
                 contentType:
                   type: string
-                  description: MIME type of the file
+                  description: Declared MIME type. Active content types such as text/html are normalized to application/octet-stream.
                   example: image/jpeg
                 size:
                   type: integer
@@ -635,6 +641,8 @@ paths:
       summary: Upload Object
       description: |
         Creates or replaces the object at the exact key, matching S3 PutObject semantics. End-user creates and replacements are gated by the `storage.objects` row-level-security policies; replacing an object never reassigns its ownership.
+
+        Inspects file signatures and scans text for active content before storing MIME metadata. Active content such as HTML, SVG, JavaScript, and XML is stored as `application/octet-stream` to prevent stored XSS. The response `mimeType` reports the effective type; the file bytes are preserved.
       tags:
         - Client
       security:
@@ -810,7 +818,8 @@ paths:
   /api/storage/buckets/{bucketName}/objects/{objectKey}/confirm-upload:
     post:
       summary: Confirm Presigned Upload
-      description: Confirms that a file was successfully uploaded to S3 using presigned URL
+      description: |
+        Confirms that a file was successfully uploaded to S3 using a presigned URL. Declared active content types such as HTML, SVG, JavaScript, and XML are normalized to `application/octet-stream` in stored metadata to prevent stored XSS. The response `mimeType` reports the effective stored type.
       tags:
         - Client
       security:
@@ -844,7 +853,7 @@ paths:
                   example: 102400
                 contentType:
                   type: string
-                  description: MIME type of the file
+                  description: Declared MIME type. Active content types such as text/html are normalized to application/octet-stream.
                   example: image/jpeg
                 etag:
                   type: string
@@ -1303,7 +1312,7 @@ components:
         mimeType:
           type: string
           example: image/jpeg
-          description: MIME type of the file
+          description: Effective stored MIME type. Uploads through the Storage REST API normalize active content such as HTML to application/octet-stream to prevent stored XSS; this may differ from the declared Content-Type.
         uploadedAt:
           type: string
           format: date-time

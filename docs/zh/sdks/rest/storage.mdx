@@ -7,6 +7,14 @@ description: 通过 InsForge REST API 从任意语言管理文件存储与存储
 
 存储API提供基于桶的文件存储，类似于S3。上传、下载和管理文件，支持本地和S3兼容存储后端。
 
+## 活动内容与 MIME 类型
+
+通过存储 REST API 和 SDK 上传时，文件字节保持不变，但 HTML、SVG、JavaScript 和 XML 等活动内容类型会被规范为 `application/octet-stream`，以防止存储型跨站脚本攻击（XSS）。例如，以 `text/html` 上传 `index.html` 会成功，但返回的 `mimeType` 为 `application/octet-stream`，其存储 URL 会下载文件，而不是呈现网页。
+
+直接上传会检查文件签名并扫描文本中的活动内容，因此存储的 MIME 类型可能与提供的 `Content-Type` 不同。上传策略和确认请求也会规范声明的活动内容类型。使用预签名上传时，请原样提交返回的所有 `fields` 值，包括其中的 `Content-Type`（如有）。
+
+此保护同样适用于公开存储桶。这些 API 不提供内联呈现 HTML 的选项；请使用网站托管服务发布 HTML 页面。
+
 ## 标头
 
 对于经过身份验证的函数调用：

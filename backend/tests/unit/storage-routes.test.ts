@@ -1,5 +1,6 @@
 import express, { type ErrorRequestHandler } from 'express';
 import http, { type Server } from 'http';
+import request from 'supertest';
 import { afterEach, describe, expect, test, vi } from 'vitest';
 
 const storageMocks = vi.hoisted(() => ({
@@ -11,6 +12,10 @@ const storageMocks = vi.hoisted(() => ({
   objectIsVisible: vi.fn(),
   listObjects: vi.fn(),
   deleteObjects: vi.fn(),
+  putObject: vi.fn(),
+  generateObjectKey: vi.fn(),
+  getUploadStrategy: vi.fn(),
+  confirmUpload: vi.fn(),
   // Default undefined return keeps existing tests on the buffered local path.
   isS3Provider: vi.fn(),
   getProvider: vi.fn(),
@@ -80,7 +85,7 @@ vi.mock('../../src/services/storage/storage.service.js', () => ({
 
 vi.mock('../../src/services/storage/storage-config.service.js', () => ({
   StorageConfigService: {
-    getInstance: () => ({}),
+    getInstance: () => ({ getMaxFileSizeBytes: async () => 50 * 1024 * 1024 }),
   },
 }));
 
@@ -113,6 +118,137 @@ describe('Storage routes', () => {
     server = undefined;
     vi.clearAllMocks();
   });
+
+  const createUploadApp = async () => {
+    vi.resetModules();
+    const { storageRouter } = await import('../../src/api/routes/storage/index.routes.js');
+    const app = express();
+    app.use(express.json());
+    app.use('/api/storage', storageRouter);
+    app.use(routeErrorHandler);
+    return app;
+  };
+
+  test.each([
+    { method: 'post', contentType: 'text/html' },
+    { method: 'post', contentType: 'text/plain' },
+    { method: 'put', contentType: 'text/html' },
+    { method: 'put', contentType: 'text/plain' },
+  ] as const)(
+    '$method upload stores HTML declared as $contentType as a downloadable binary',
+    async ({ method, contentType }) => {
+      const file = Buffer.from('<!DOCTYPE html><html><body>Hello</body></html>');
+      storageMocks.generateObjectKey.mockReturnValue('index.html');
+      storageMocks.putObject.mockImplementation(async (_user, bucket, key, uploadedFile) => ({
+        bucket,
+        key,
+        size: uploadedFile.size,
+        mimeType: uploadedFile.mimetype,
+        url: `/api/storage/buckets/${bucket}/objects/${key}`,
+      }));
+
+      const app = await createUploadApp();
+      const path = '/api/storage/buckets/pages/objects';
+      const response = await request(app)
+        [method](method === 'put' ? `${path}/index.html` : path)
+        .attach('file', file, { filename: 'index.html', contentType });
+
+      expect(response.status, response.text).toBe(method === 'post' ? 201 : 200);
+      expect(response.body.mimeType).toBe('application/octet-stream');
+      const uploadedFile = storageMocks.putObject.mock.calls[0][3];
+      expect(uploadedFile.mimetype).toBe('application/octet-stream');
+      expect(uploadedFile.buffer).toEqual(file);
+
+      // Follow the returned URL to verify download headers and unchanged bytes.
+      storageMocks.isBucketPublic.mockResolvedValue(true);
+      storageMocks.getObjectMetadataVisible.mockResolvedValue({
+        mime_type: response.body.mimeType,
+      });
+      storageMocks.getDownloadStrategy.mockResolvedValue({ method: 'direct' });
+      storageMocks.isS3Provider.mockReturnValue(false);
+      storageMocks.getObject.mockResolvedValue({ file, metadata: response.body });
+      const download = await request(app).get(response.body.url);
+
+      expect(download.status).toBe(200);
+      expect(download.headers['content-type']).toBe('application/octet-stream');
+      expect(download.headers['x-content-type-options']).toBe('nosniff');
+      expect(download.body).toEqual(file);
+    }
+  );
+
+  test.each(['post', 'put'] as const)(
+    '%s upload preserves safe text MIME types and file bytes',
+    async (method) => {
+      const file = Buffer.from('id,name\n1,Alice\n');
+      storageMocks.generateObjectKey.mockReturnValue('report.csv');
+      storageMocks.putObject.mockResolvedValue({ mimeType: 'text/csv' });
+      const app = await createUploadApp();
+      const path = '/api/storage/buckets/reports/objects';
+
+      const response = await request(app)
+        [method](method === 'put' ? `${path}/report.csv` : path)
+        .attach('file', file, { filename: 'report.csv', contentType: 'text/csv' });
+
+      expect(response.status, response.text).toBe(method === 'post' ? 201 : 200);
+      const uploadedFile = storageMocks.putObject.mock.calls[0][3];
+      expect(uploadedFile.mimetype).toBe('text/csv');
+      expect(uploadedFile.buffer).toEqual(file);
+    }
+  );
+
+  test.each([
+    ['text/html', 'application/octet-stream'],
+    ['TEXT/HTML; charset=utf-8', 'application/octet-stream'],
+    ['image/svg+xml', 'application/octet-stream'],
+    ['application/javascript', 'application/octet-stream'],
+    ['application/xml', 'application/octet-stream'],
+    ['image/jpeg', 'image/jpeg'],
+    ['image/png', 'image/png'],
+    ['application/pdf', 'application/pdf'],
+    ['text/csv', 'text/csv'],
+  ])(
+    'upload strategy and confirmation normalize declared %s to %s',
+    async (contentType, expectedType) => {
+      const strategy = {
+        method: 'presigned',
+        uploadUrl: 'https://storage.example.test',
+        fields: { 'Content-Type': expectedType },
+        key: 'index.html',
+        confirmRequired: true,
+      };
+      storageMocks.getUploadStrategy.mockResolvedValue(strategy);
+      storageMocks.confirmUpload.mockResolvedValue({ mimeType: expectedType });
+      const app = await createUploadApp();
+
+      const upload = await request(app)
+        .post('/api/storage/buckets/pages/upload-strategy')
+        .send({ filename: 'index.html', contentType, size: 100 });
+
+      expect(upload.status, upload.text).toBe(200);
+      expect(storageMocks.getUploadStrategy).toHaveBeenCalledWith(
+        undefined,
+        'pages',
+        { filename: 'index.html', contentType: expectedType, size: 100 },
+        false,
+        expectedType
+      );
+      expect(upload.body).toEqual(strategy);
+
+      const confirmation = await request(app)
+        .post('/api/storage/buckets/pages/objects/index.html/confirm-upload')
+        .send({ contentType, size: 100, etag: 'test-etag' });
+
+      expect(confirmation.status, confirmation.text).toBe(200);
+      expect(storageMocks.confirmUpload).toHaveBeenCalledWith(
+        undefined,
+        'pages',
+        'index.html',
+        { contentType: expectedType, size: 100, etag: 'test-etag' },
+        false
+      );
+      expect(confirmation.body.mimeType).toBe(expectedType);
+    }
+  );
 
   test('list objects route returns the shared response schema', async () => {
     vi.resetModules();

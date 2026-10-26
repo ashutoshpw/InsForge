@@ -72,6 +72,10 @@ try await insforge.storage.deleteBucket("old-bucket")
 
 Upload a file to the bucket.
 
+<Warning>
+HTML, SVG, JavaScript, and XML uploads are stored as `application/octet-stream` to prevent stored cross-site scripting (XSS). For example, `index.html` uploads successfully, but its URL downloads the file instead of rendering a page, even in a public bucket. Check the returned `mimeType` for the effective type. These APIs do not offer an option to serve HTML inline.
+</Warning>
+
 ### Parameters
 
 - `path` (String) - The object key/path for the file
