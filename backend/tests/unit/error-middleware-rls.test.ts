@@ -3,6 +3,7 @@ import { DatabaseError } from 'pg';
 import type { Request, Response } from 'express';
 import { errorMiddleware } from '@/api/middlewares/error.js';
 import { AppError } from '@/utils/errors.js';
+import logger from '@/utils/logger.js';
 import { ERROR_CODES } from '@insforge/shared-schemas';
 
 vi.mock('@/utils/logger.js', () => ({
@@ -75,8 +76,9 @@ describe('errorMiddleware', () => {
     errorMiddleware(err, req, res, next);
 
     expect(res.statusCode).toBe(400);
-    const body = res.body as { error: string };
+    const body = res.body as { error: string; message: string };
     expect(body.error).toBe(ERROR_CODES.INVALID_INPUT);
+    expect(body.message).toBe('bad input');
   });
 
   it('falls back to 500 for unknown errors even when they carry a 4xx status', () => {
@@ -89,11 +91,11 @@ describe('errorMiddleware', () => {
     expect(res.statusCode).toBe(500);
     const body = res.body as { error: string; message: string };
     expect(body.error).toBe(ERROR_CODES.INTERNAL_ERROR);
-    expect(body.message).toBe('not found from an unknown source');
+    expect(body.message).toBe('Internal server error');
   });
 
   it('falls back to 500 for unrecognized pg codes', () => {
-    const err = makePgError('XX000', 'internal error');
+    const err = makePgError('XX000', 'database connection failed for user internal_admin');
     const req = {} as Request;
     const res = makeMockRes();
     const next = vi.fn();
@@ -101,5 +103,73 @@ describe('errorMiddleware', () => {
     errorMiddleware(err, req, res, next);
 
     expect(res.statusCode).toBe(500);
+    expect(res.body).toMatchObject({
+      error: ERROR_CODES.INTERNAL_ERROR,
+      message: 'Internal server error',
+      statusCode: 500,
+    });
+  });
+
+  it('keeps unexpected error details in server logs and out of the response', () => {
+    const err = new Error('connection failed: postgres://admin:secret@internal-db:5432/app');
+    const req = {} as Request;
+    const res = makeMockRes();
+    const next = vi.fn();
+
+    errorMiddleware(err, req, res, next);
+
+    expect(res.statusCode).toBe(500);
+    expect(res.body).toEqual({
+      error: ERROR_CODES.INTERNAL_ERROR,
+      message: 'Internal server error',
+      statusCode: 500,
+      nextActions: undefined,
+    });
+    expect(logger.error).toHaveBeenCalledWith('Error occurred', {
+      error: err.message,
+      stack: err.stack,
+    });
+  });
+
+  it.each([
+    { message: 'secret token', statusCode: 403 },
+    {},
+    'secret token',
+    42,
+    false,
+    null,
+    undefined,
+  ])('returns a generic 500 for an unrecognized thrown value: %j', (err) => {
+    const req = {} as Request;
+    const res = makeMockRes();
+    const next = vi.fn();
+
+    errorMiddleware(err, req, res, next);
+
+    expect(res.statusCode).toBe(500);
+    expect(res.body).toMatchObject({
+      error: ERROR_CODES.INTERNAL_ERROR,
+      message: 'Internal server error',
+      statusCode: 500,
+    });
+  });
+
+  it.each([
+    new SyntaxError('Unexpected token in JSON'),
+    { type: 'entity.parse.failed', status: 400, message: 'Invalid JSON in request body' },
+  ])('preserves recognized JSON parsing errors: %j', (err) => {
+    const req = {} as Request;
+    const res = makeMockRes();
+    const next = vi.fn();
+
+    errorMiddleware(err, req, res, next);
+
+    expect(res.statusCode).toBe(400);
+    expect(res.body).toMatchObject({
+      error: ERROR_CODES.INVALID_INPUT,
+      message: err.message,
+      statusCode: 400,
+      nextActions: 'Please ensure your request body contains valid JSON',
+    });
   });
 });
