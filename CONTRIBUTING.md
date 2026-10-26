@@ -12,6 +12,7 @@ Thank you for your interest in contributing to InsForge. This guide will help yo
 - [Testing](#testing)
 - [Pull Request Process](#pull-request-process)
 - [Code Style](#code-style)
+- [Shared Error Codes](#shared-error-codes)
 
 ## Code of Conduct
 
@@ -141,6 +142,12 @@ All contributions must include appropriate tests. Follow these guidelines:
 - Use meaningful variable and function names
 - Add comments for complex logic
 - Update relevant documentation when making API changes
+
+## Shared Error Codes
+
+Define shared API error codes in `packages/shared-schemas/src/error-codes.schema.ts` and import `ERROR_CODES`, `errorCodeSchema`, and the `ErrorCode` type from `@insforge/shared-schemas`. Keep existing string values stable, validate untrusted codes at provider boundaries, and preserve the code emitted by existing endpoints unless the compatibility change is explicit and tested.
+
+See the [shared error-code contributor reference](.agents/docs/error-codes.md) for import examples, HTTP and provider boundaries, regression tests, and installed-package validation. Include a regression test for new error behavior and a compatibility note whenever a response code changes.
 
 ## Documentation Assets
 

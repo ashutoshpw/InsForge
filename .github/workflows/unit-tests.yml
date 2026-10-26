@@ -25,3 +25,6 @@ jobs:
 
       - name: Run backend unit tests
         run: npm run test:backend
+
+      - name: Check installed shared-schema package exports
+        run: npm --workspace @insforge/shared-schemas run test:package

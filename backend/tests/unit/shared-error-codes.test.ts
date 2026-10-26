@@ -38,6 +38,10 @@ describe('shared error codes', () => {
    * accidentally reverted.
    */
   describe('domain-specific codes (migration from generic codes)', () => {
+    it('COMPUTE_QUOTA_EXCEEDED is stable', () => {
+      expect(sharedErrorCodes.COMPUTE_QUOTA_EXCEEDED).toBe('COMPUTE_QUOTA_EXCEEDED');
+    });
+
     // Secrets module — replaced NOT_FOUND / ALREADY_EXISTS
     it('SECRET_NOT_FOUND is stable', () => {
       expect(sharedErrorCodes.SECRET_NOT_FOUND).toBe('SECRET_NOT_FOUND');
